@@ -1,0 +1,10 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/433646/1579433c98db4fae949f9ef6658708b8
+bundleId: https://api.rpubs.com/api/v1/document/433646/1579433c98db4fae949f9ef6658708b8
+url: http://rpubs.com/pkowalchuk/433646
+when: 1540604594.35789

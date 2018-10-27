@@ -206,7 +206,7 @@ Response variables are the price of Gasoline in the US in both the Gulf of Mexic
 
 **You should have two independent variables, one quantitative and one qualitative.**
 
-The independent variables are the price of WTI and Brent oil, both numerical, and the US administration's ruling party and president.  
+The independent variables are the price of WTI and Brent oil, both numerical, and the US administration's ruling party and president is qualitative.  
 
 ### Relevant summary statistics 
 
