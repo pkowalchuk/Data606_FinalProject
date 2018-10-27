@@ -13,7 +13,9 @@ knitr::opts_chunk$set(echo = TRUE)
 library(FredR)
 library(pipeR)
 library(dplyr)
+library(psych)
 library(ggplot2)
+library(kableExtra)
 ```
 
 ### Data Preparation
@@ -31,12 +33,15 @@ https://github.com/jcizel/FredR
 ```{r}
 api.key = "4844eb6986119824760163e60bddd945"
 fred<-FredR(api.key)
+#We seach for the data series we need for oil and gasoline
 oil.series<-fred$series.search("OIL")
+oil.series %>% kable() %>% kable_styling() %>% scroll_box(width = "910px", height = "400px")
 gasoline.series<-fred$series.search("GASOLINE")
+gasoline.series %>% kable() %>% kable_styling() %>% scroll_box(width = "910px", height = "400px")
 ```
-
-Oil Data
-
+    
+** Oil Data **
+    
 ```{r}
 wti<-fred$series.observations(series_id = 'DCOILWTICO')
 brent<-fred$series.observations(series_id = 'DCOILBRENTEU')
@@ -72,9 +77,9 @@ dt<-na.omit(dtOil)
 dtOil$Diff_Oil<-(dtOil$WTI_Price - dtOil$Brent_Price)
 
 ```
-
-Gasoline Data
-
+   
+** Gasoline Data **
+    
 ```{r}
 gasolineNY<-fred$series.observations(series_id = 'DGASNYH')
 gasolineGOM<-fred$series.observations(series_id = 'DGASUSGULF')
@@ -110,16 +115,17 @@ dtGasoline<-na.omit(dtGasoline)
 dtGasoline$Diff_Gasoline<-(dtGasoline$GOM_Gasoline_Price - dtGasoline$NY_Gasoline_Price)
 ```
 
-Presidency Data
+**Presidency Data**
 
 ```{r}
+# We manually create a table with each president
 presidents<-data.frame("Date"=c("1981-01-20","1989-01-20","1993-01-20","2001-01-20","2009-01-20","2017-01-20"),"Party"=c("Republican","Republican","Democrat","Republican","Democrat","Republican"),"President"=c("Ronal Reagan","George HW Bush","Bill Clinton","George W Bush","Barrak Obama","Donald Trump")) %>% mutate(Date=as.Date(Date))
-
+## Then we add data for each day
 days<-data.frame(seq(as.Date(presidents[1,1]),Sys.Date(),"days"))
 colnames(days)<-c("Date")
 days<-tbl_df(days)
 dtPresidency<-full_join(days,presidents)
-
+#using a for loop to fill in the NA rows
 for(i in 1:nrow(dtPresidency)) {
   if (is.na(dtPresidency$Party[i])) {
     dtPresidency$Party[i]<-dtPresidency$Party[i-1]
@@ -128,25 +134,26 @@ for(i in 1:nrow(dtPresidency)) {
 }
 ```
 
-Final Data Table
+**Final Data Table**
 
 ```{r}
 dtFinal<-full_join(dtPresidency,dtOil)
 dtFinal<-full_join(dtFinal,dtGasoline)
 dtFinal<-na.omit(dtFinal)
+ dtFinal %>% kable() %>% kable_styling() %>% scroll_box(width = "910px", height = "400px")
 ```
 
 ### Research question 
 
 **You should phrase your research question in a way that matches up with the scope of inference your dataset allows for.**
 
-The oil market is tracked by two major indeceis: WTI and Brent.       
+The oil market is tracked by two major indices: WTI and Brent.       
 WTI, or West Texas Intermediate, is the price of US produced oil (mainly from the West Texas Permian region) stored in Cushing, Oklahoma and trader in the New York Stock Exchange. WTI is the benchmark domestic oil price.   
 Brent is the price of oil produced in the North Sea stored in the UK and traded in the London Stock Exchange. Brent is the benchmark imported oil price.     
-Gasoline in the US is mainly refined in the Gulf of Mexico region (Texas and Lousiana), and in the Mid-West and North East regions (Illinois, Ohio, Pensilvania and New York). Price is followed by two mayor indecies reflecting each gasoline prices in these two regions: Conventional Gasoline Prices US Gulf Coast Regular and Conventional Gasoline Prices New York Harbour Regular.
+Gasoline in the US is mainly refined in the Gulf of Mexico region (Texas and Louisiana), and in the Mid-West and North East regions (Illinois, Ohio, Pensilvania and New York). Price is followed by two mayor indices reflecting each gasoline prices in these two regions: Conventional Gasoline Prices US Gulf Coast Regular and Conventional Gasoline Prices New York Harbor Regular.
 WTI oil is mainly refined in the mid-west/north east region, while imported Brent oil is in its majority refined in the Gulf Cost Region.     
-The price of gasoline is in large measure determined by the proce of oil used to produce it.
-In this analysis we want to look at the differences, if any, between different US administrations and the price of oil. The premise is that certain adminstrations might have been inclined to support international markets at the expense of the use market. Policies to help the Middle East region for example, from where most of the international oil comes from, would help tame Brent prices at the expense of WTI.       
+The price of gasoline is in large measure determined by the price of oil used to produce it.
+In this analysis we want to look at the differences, if any, between different US administrations and the price of oil. The premise is that certain administrations might have been inclined to support international markets at the expense of the use market. Policies to help the Middle East region for example, from where most of the international oil comes from, would help tame Brent prices at the expense of WTI.       
 
 With this in mind we ask the following questions:     
 
@@ -160,7 +167,7 @@ Answering these question will give us a sense of how we are affected by the posi
 
 **What are the cases, and how many are there?**
 
-Cases are the daily price of WTI and Brent oil, together with categorical valiables for the respective US Administration ruling party and president.   
+Cases are the daily price of WTI and Brent oil, together with categorical variables for the respective US Administration ruling party and president.   
 Total number of cases are shown below:
 ```{r}
 nrow(dtFinal)
@@ -171,7 +178,7 @@ nrow(dtFinal)
 
 **Describe the method of data collection.**
 
-Data is collected by the US Federal Reserve Bank of St. Louis. Oil data is collected by taking the closing price of WTI oil at the New York Stock Exchange, and the closing price for oil at the London Stock Exchange. Gasoline data is collected as the closing price for Conventional Gasoline Prices US Gulf Coast Regular and the New York Harbour Regular both traded in the Chicago Mercantile Exchange.  
+Data is collected by the US Federal Reserve Bank of St. Louis. Oil data is collected by taking the closing price of WTI oil at the New York Stock Exchange, and the closing price for oil at the London Stock Exchange. Gasoline data is collected as the closing price for Conventional Gasoline Prices US Gulf Coast Regular and the New York Harbor Regular both traded in the Chicago Mercantile Exchange. 
 
 ### Type of study 
 
@@ -186,20 +193,20 @@ This is an observational study.
 Oil and Gasoline data collected from the US Federal Reserve    
 https://fred.stlouisfed.org/   
 
-US predicency data table created manually using data from Wikipedia
+US party/president data table created manually using data from Wikipedia
 https://en.wikipedia.org/wiki/List_of_Presidents_of_the_United_States
 
 ### Dependent Variable
 
 **What is the response variable? Is it quantitative or qualitative?**
 
-Response variables is the price of Gasoline in the US in both the Gulf of Mexico and New York, they are both numerical.
+Response variables are the price of Gasoline in the US in both the Gulf of Mexico and New York regions, they are both numerical.
 
 ### Independent Variable
 
 **You should have two independent variables, one quantitative and one qualitative.**
 
-The indenpent variables are the price of WTI and Brent oil, both nimerical, and the US administration's ruling party and president.  
+The independent variables are the price of WTI and Brent oil, both numerical, and the US administration's ruling party and president.  
 
 ### Relevant summary statistics 
 
@@ -208,14 +215,22 @@ The indenpent variables are the price of WTI and Brent oil, both nimerical, and 
 
 ```{r}
 #oil
-ggplot()+geom_line(data=dtOil,aes(x=Date,y=WTI_Price),color="red")+geom_line(data=dtOil,aes(x=Date,y=Brent_Price),color="blue")+geom_line(data=dtOil,aes(x=Date,y=Diff_Oil),color="yellow")
+describe(dtFinal$Diff_Oil)
 
-hist(dtOil$Diff_Oil,breaks=200)
+ggplot()+geom_line(data=dtFinal,aes(x=Date,y=WTI_Price),color="red")+geom_line(data=dtFinal,aes(x=Date,y=Brent_Price),color="blue")+geom_line(data=dtFinal,aes(x=Date,y=Diff_Oil),color="yellow")
+
+hist(dtFinal$Diff_Oil,breaks=200)
+qqnorm(dtFinal$Diff_Oil)
+qqline(dtFinal$Diff_Oil)
 
 
 #gasoline
-ggplot()+geom_line(data=dtGasoline,aes(x=Date,y=GOM_Gasoline_Price),color="red")+geom_line(data=dtGasoline,aes(x=Date,y=NY_Gasoline_Price),color="blue")+geom_line(data=dtGasoline,aes(x=Date,y=Diff_Gasoline),color="yellow")
+describe(dtFinal$Diff_Gasoline)
 
-hist(dtGasoline$Diff_Gasoline,breaks=100,xlim=c(-0.5,0.5))
+ggplot()+geom_line(data=dtFinal,aes(x=Date,y=GOM_Gasoline_Price),color="red")+geom_line(data=dtFinal,aes(x=Date,y=NY_Gasoline_Price),color="blue")+geom_line(data=dtFinal,aes(x=Date,y=Diff_Gasoline),color="yellow")
+
+hist(dtFinal$Diff_Gasoline,breaks=100,xlim=c(-0.5,0.5))
+qqnorm(dtFinal$Diff_Gasoline)
+qqline(dtFinal$Diff_Gasoline)
 ```
 
