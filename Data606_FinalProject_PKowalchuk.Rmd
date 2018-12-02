@@ -1,0 +1,554 @@
+---
+title: DATA 606 Final Data Project
+author: Peter Kowalchuk 
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+#Administration's party and the prices of oil and gasoline
+
+## Part 1 - Introduction
+
+The oil market is tracked by two major indices: WTI and Brent. WTI, or West Texas Intermediate, is the price of US produced oil (mainly from the West Texas Permian region) stored in Cushing, Oklahoma and traded in the New York Stock Exchange. WTI is the benchmark domestic oil price. Brent is the price of oil produced in the North Sea stored in the UK and traded in the London Stock Exchange. Brent is the benchmark imported oil price.   
+
+Gasoline in the US is mainly refined in the Gulf of Mexico region (Texas and Louisiana), and in the Mid-West and North East regions (Illinois, Ohio, Pensilvania and New York). Price is followed by two mayor indices reflecting each gasoline price in these two regions: Conventional Gasoline Prices US Gulf Coast Regular and Conventional Gasoline Prices New York Harbor Regular.
+WTI oil is mainly refined in the mid-west/north east region, while imported Brent oil is in its majority refined in the Gulf Cost Region. The price of gasoline is in large measure determined by the price of oil used to produce it.   
+
+In this analysis we want to look at the differences, if any, between different US administrations and the price of oil. The premise is that certain administrations might have been inclined to support international markets at the expense of the US market. Policies to help the Middle East region for example, from where most of the international oil comes from, would help tame Brent prices at the expense of WTI prices.  
+
+###Analysis Questions
+
+**1)** Have different administrations supported US (WTI) or international (Brent) oil differently?    
+
+**2)** Is US domestic (WTI) or imported (Brent) oil a better indicator of gasoline prices?    
+
+Answering these question will give us a sense of how we are affected by the position of the US in international relations.
+
+
+## Part 2 - Data
+
+### Data Collection
+
+Data is collected by the US Federal Reserve Bank of St. Louis. Oil data is collected by taking the closing price of WTI oil at the New York Stock Exchange, and the closing price for oil at the London Stock Exchange. Gasoline data is collected as the closing price for Conventional Gasoline Prices US Gulf Coast Regular and the New York Harbor Regular both traded in the Chicago Mercantile Exchange. 
+
+Oil and Gasoline data collected from the US Federal Reserve    
+https://fred.stlouisfed.org/   
+
+US party/president data table created manually using data from Wikipedia
+https://en.wikipedia.org/wiki/List_of_Presidents_of_the_United_States
+
+### Data Preparation
+
+```{r message=FALSE}
+library(FredR)
+library(pipeR)
+library(dplyr)
+library(psych)
+library(ggplot2)
+library(kableExtra)
+```
+
+Data for this project was sourced from the US Federal Reserver Economic Data (FRED) site.    
+https://fred.stlouisfed.org/
+
+The provided API was used to extract the required data.   
+https://research.stlouisfed.org/docs/api/fred/
+
+In the R enviroment, a recomended third party software(library) was used. La library is staged in a GitHub repository. It was loaded on to the IDE using Hadley's devtools: devtools::install_github("jcizel/FredR")  
+https://github.com/jcizel/FredR
+
+
+```{r}
+api.key = "4844eb6986119824760163e60bddd945"
+fred<-FredR(api.key)
+#We seach for the data series we need for oil and gasoline
+oil.series<-fred$series.search("OIL")
+oil.series %>% kable() %>% kable_styling() %>% scroll_box(width = "910px", height = "400px")
+gasoline.series<-fred$series.search("GASOLINE")
+gasoline.series %>% kable() %>% kable_styling() %>% scroll_box(width = "910px", height = "400px")
+```
+    
+** Oil Data **
+    
+```{r}
+wti<-fred$series.observations(series_id = 'DCOILWTICO')
+brent<-fred$series.observations(series_id = 'DCOILBRENTEU')
+```
+
+```{r}
+dtwti<-wti %>>%
+select(
+    date,
+    value
+) %>>%
+mutate(
+    date = as.Date(date),
+    value = as.numeric(value)
+) 
+colnames(dtwti)<-c('Date','WTI_Price')
+
+dtbrent<-brent %>>%
+select(
+    date,
+    value
+) %>>%
+mutate(
+    date = as.Date(date),
+    value = as.numeric(value)
+)
+colnames(dtbrent)<-c('Date','Brent_Price')
+
+dtOil<-full_join(dtwti,dtbrent) %>% tbl_df()
+
+dt<-na.omit(dtOil)
+
+dtOil$Diff_Oil<-(dtOil$WTI_Price - dtOil$Brent_Price)
+
+```
+   
+** Gasoline Data **
+    
+```{r}
+gasolineNY<-fred$series.observations(series_id = 'DGASNYH')
+gasolineGOM<-fred$series.observations(series_id = 'DGASUSGULF')
+```
+
+```{r}
+dtgasolineNY<-gasolineNY %>>%
+select(
+    date,
+    value
+) %>>%
+mutate(
+    date = as.Date(date),
+    value = as.numeric(value)
+) 
+colnames(dtgasolineNY)<-c('Date','NY_Gasoline_Price')
+
+dtgasolineGOM<-gasolineGOM %>>%
+select(
+    date,
+    value
+) %>>%
+mutate(
+    date = as.Date(date),
+    value = as.numeric(value)
+)
+colnames(dtgasolineGOM)<-c('Date','GOM_Gasoline_Price')
+
+dtGasoline<-full_join(dtgasolineNY,dtgasolineGOM) %>% tbl_df()
+
+dtGasoline<-na.omit(dtGasoline)
+
+dtGasoline$Diff_Gasoline<-(dtGasoline$GOM_Gasoline_Price - dtGasoline$NY_Gasoline_Price)
+```
+
+**Presidency Data**
+
+```{r}
+# We manually create a table with each president
+presidents<-data.frame("Date"=c("1981-01-20","1989-01-20","1993-01-20","2001-01-20","2009-01-20","2017-01-20"),"Party"=c("Republican","Republican","Democrat","Republican","Democrat","Republican"),"President"=c("Ronal Reagan","George HW Bush","Bill Clinton","George W Bush","Barrak Obama","Donald Trump")) %>% mutate(Date=as.Date(Date))
+## Then we add data for each day
+days<-data.frame(seq(as.Date(presidents[1,1]),Sys.Date(),"days"))
+colnames(days)<-c("Date")
+days<-tbl_df(days)
+dtPresidency<-full_join(days,presidents)
+#using a for loop to fill in the NA rows
+for(i in 1:nrow(dtPresidency)) {
+  if (is.na(dtPresidency$Party[i])) {
+    dtPresidency$Party[i]<-dtPresidency$Party[i-1]
+    dtPresidency$President[i]<-dtPresidency$President[i-1]
+  }
+}
+```
+
+**Final Data Table**
+
+```{r}
+dtFinal<-full_join(dtPresidency,dtOil)
+dtFinal<-full_join(dtFinal,dtGasoline)
+dtFinal<-na.omit(dtFinal)
+ head(dtFinal,n=500) %>% kable() %>% kable_styling() %>% scroll_box(width = "1000px", height = "400px")
+```
+
+### Cases
+
+Cases are the daily price of WTI and Brent oil, together with categorical variables for the respective US Administration ruling party and president.   
+
+Total number of cases are shown below:
+```{r}
+nrow(dtFinal)
+```
+
+### Variables
+
+**Dependent Variable**
+
+Response variables are the price of Gasoline in the US in both the Gulf of Mexico and New York regions, they are both numerical.
+
+**Independent Variable**
+
+The independent variables are the price of WTI and Brent oil, both numerical, and the US administration's ruling party and president, which are qualitative.  
+
+### Type of study
+
+This is an observational study.
+
+### Scope of inference - generalizability
+
+The general population for this analysis are oil and gasoline prices past and future. We only have a sample of past data, but with this analysis we are trying to infer the effect on prices in the future and in the past which are not part of this data set, prior to 1987. This generalization assumes other factors or variables remain constant. For example the premise that one party supports international relations above the other might not hold true at all times. During major international conflicts such as World Wars or international embargoes such as OPEC in the early 1970's, lines between party positions might be blurred. It is also possible that certain administration while holding true to their party lines in most issues, might depart from the party's status quo position with respect to oil and energy policy. An example might be President's Obama decision to lift oil export bans, which might seem as supporting the oil industry, while his Democratic party usually does not support the industry. On the Republican side, which usually supports oil and gas, an example is President's Trump constant pressure on international oil producers to increase production, which hurts the oil industry.
+
+### Scope of inference - causality
+
+This being an observational study, establishing causality would be very difficult. We can only determine if there is a relationship between our input and output data. That is, we can only conclude our analysis identifies a correlation between the prices of oil and gasoline and the administration in power. We can not conclude that a given administration causes a determined price of oil and gasoline.
+
+## Part 3 - Exploratory data analysis
+
+```{r}
+#oil
+describe(dtFinal$Diff_Oil)
+
+ggplot()+geom_line(data=dtFinal,aes(x=Date,y=WTI_Price),color="red")+geom_line(data=dtFinal,aes(x=Date,y=Brent_Price),color="blue")+geom_line(data=dtFinal,aes(x=Date,y=Diff_Oil),color="yellow")
+
+hist(dtFinal$Diff_Oil,breaks=200)
+qqnorm(dtFinal$Diff_Oil)
+qqline(dtFinal$Diff_Oil)
+
+
+#gasoline
+describe(dtFinal$Diff_Gasoline)
+
+ggplot()+geom_line(data=dtFinal,aes(x=Date,y=GOM_Gasoline_Price),color="red")+geom_line(data=dtFinal,aes(x=Date,y=NY_Gasoline_Price),color="blue")+geom_line(data=dtFinal,aes(x=Date,y=Diff_Gasoline),color="yellow")
+
+hist(dtFinal$Diff_Gasoline,breaks=100,xlim=c(-0.5,0.5))
+qqnorm(dtFinal$Diff_Gasoline)
+qqline(dtFinal$Diff_Gasoline)
+```
+
+## Part 4 - Data Analysis
+
+### Inference
+**1) Have different administrations supported US (WTI) or international (Brent) oil differently?**    
+
+To answer this question we state the following hypothesis:
+
+$H_0$: The difference between WTI and Brent is the same regarless of the in power administration's party.    
+Diff_oil$_{Republican}$ = Diff_oil$_{Any\_party}$ 
+
+$H_a$: The difference between WTI and Brent is different when the administration's party is Republican or Democrat.     
+Diff_oil$_{Republican}$ $\not=$ Diff_oil$_{Any\_party}$
+
+To perform this analysis we start with the sample of oil price differences we already have from our exploratory analysis. 
+
+```{r}
+sample_diff_oil<-dtFinal$Diff_Oil
+```
+
+From this data we calculate the confidence interval. This will tell us what rage of values the population's diff in oil prices mean will be. We use a 95% confidence interval, which corresponds to a z of ~1.96
+
+```{r}
+z<--qnorm(0.025)
+z
+```
+
+We canculate the mean and standard deviation for our sample
+
+```{r}
+sample_mean<-mean(sample_diff_oil)
+sample_mean
+sample_sd<-sd(sample_diff_oil)
+sample_sd
+```
+
+We start by calculating the standard error for this sample:
+
+SE = z * (sd / sqrt(n))
+
+```{r}
+n<-length(sample_diff_oil)
+n
+SE<-z * (sample_sd / sqrt(n))
+SE
+```
+
+With the SE we calculate our confidence interval:
+
+SE = (upper - sample_mean) / z     
+upper = sample_mean + SE * Z
+
+```{r}
+upper<-sample_mean + SE * z
+lower<-sample_mean - SE * z
+confidence_interval<-c(lower,upper)
+confidence_interval
+```
+
+With this interval, we can now test our null hypothesis agaisnt any given value of difference between the two oil benchmarks. We can therefore test our null agaisn the oil benchmark difference when the administration is Republican or Democrat.
+
+**Republican Administration**
+
+First build a sample of oil prices difference for Republican administrations
+
+```{r}
+sample_diff_oil_republican<-subset(dtFinal,dtFinal$Party == "Republican")
+#instead of taking all of the observations, we build a random sample of 1000 observations
+sample_diff_oil_republican<-sample_n(sample_diff_oil_republican,1000)
+head(sample_diff_oil_republican,n=100) %>% kable() %>% kable_styling() %>% scroll_box(width = "1000px", height = "400px")
+sample_diff_oil_republican<-sample_diff_oil_republican$Diff_Oil
+mean_republican<-mean(sample_diff_oil_republican)
+mean_republican
+```
+
+Now we compare the Republican mean to the confidence interval. If it is within the interval, then we can not reject the mean and conclude the difference in bench mark oil indices is not different under a Republican administration. If it is outside the interval, then we reject the null hypothesis and conclude there is evidence that the difference in oil indices is different under a Republican administration.
+
+```{r}
+if (mean_republican<confidence_interval[1] || mean_republican>confidence_interval[2]) {
+  print("We reject the null, there is evidence that oil indices are different under a Republican administration")
+} else {
+  print("We can not reject the null, there is no evidence that oil indices are different under a Republican administration")
+}
+```
+
+The analysis shows there is a difference between oil indices under a Republican administration. In fact if we observe that the mean is higher than the upper limit of the confidence interval, we can say there is evidence that WTI is higher than Brent under a Republican administration.
+
+**Democrat Administration**
+
+As before, first build a sample of oil prices difference for Republican administrations
+
+```{r}
+sample_diff_oil_democrat<-subset(dtFinal,dtFinal$Party == "Democrat")
+#instead of taking all of the observations, we build a random sample of 1000 observations
+sample_diff_oil_democrat<-sample_n(sample_diff_oil_democrat,1000)
+head(sample_diff_oil_democrat,n=100) %>% kable() %>% kable_styling() %>% scroll_box(width = "1000px", height = "400px")
+sample_diff_oil_democrat<-sample_diff_oil_democrat$Diff_Oil
+mean_democrat<-mean(sample_diff_oil_democrat)
+mean_democrat
+```
+
+Again we compare the Democratic mean to the confidence interval.
+
+```{r}
+if (mean_democrat<confidence_interval[1] || mean_democrat>confidence_interval[2]) {
+  print("We reject the null, there is evidence that oil indices are different under a Democrat administration")
+} else {
+  print("We can not reject the null, there is no evidence that oil indices are different under a Democrat administration")
+}
+```
+
+We gain see the result outside the confidence interval, so also for the Democrat Administrations, we reject the null hypothesis and conclude that there is evidence that the difference between WTI and Brent is different under a Democratic administration. Because the Democratic mean is below the interval, we can also say there is evidence that under a Democratic administration, WTI prices are lower than Brent.
+
+**Skew in sample_diff_oil**
+
+As can be seen the sample_diff_oil we has some strong left skew.
+
+```{r}
+hist(sample_diff_oil,freq = FALSE,breaks=200)
+x <- seq(-30,20, by = 0.1)
+y <- dnorm(x,sample_mean,sample_sd)
+lines(x = x, y = y, col = "blue")
+```
+
+Just for curiosity, the analysis was repeated but using parameters for a distribution which seems to fit the sample_diff_oil better in its center and ignores its left skew. Parameters were calculated by visual inspection. This does not represent proper statistical analysis, but is rather an exercise to see if the results would be different, and potentially to conclude the skew in our sample distribution is too large for the analysis to be valid.
+
+```{r}
+sample_sd<-sd(sample_diff_oil)/5
+sample_sd
+sample_mean<-median(sample_diff_oil)
+sample_mean
+hist(sample_diff_oil,freq = FALSE,breaks=200)
+x <- seq(-30,20, by = 0.1)
+y <- dnorm(x,sample_mean,sample_sd)
+lines(x = x, y = y, col = "blue")
+SE<-z * (sample_sd / sqrt(n))
+SE
+upper<-sample_mean + SE * z
+lower<-sample_mean - SE * z
+confidence_interval<-c(lower,upper)
+confidence_interval
+```
+
+Republican Administration
+
+```{r}
+if (mean_republican<confidence_interval[1] || mean_republican>confidence_interval[2]) {
+  print("We reject the null, there is evidence that oil indices are different under a Republican administration")
+} else {
+  print("We can not reject the null, there is no evidence that oil indices are different under a Republican administration")
+}
+```
+
+We again reject the null. But this time the difference for a Republican administrations falls below the interval. 
+
+Democrat Administration
+
+```{r}
+if (mean_democrat<confidence_interval[1] || mean_democrat>confidence_interval[2]) {
+  print("We reject the null, there is evidence that oil indices are different under a Democrat administration")
+} else {
+  print("We can not reject the null, there is no evidence that oil indices are different under a Democrat administration")
+}
+```
+
+Result is similar with the original sample_diff_oil distribution
+
+The problem with using this distribution for our analysis is that it discounts most of the observations in the skew sample. Although we again reject the null for both administrations, they both fall under the interval, because most observation are below this empirical distribution we used. Analysis with this distribution doesn't seem to be valid and is discarded.
+
+### Regression
+**2) Is US domestic (WTI) or imported (Brent) oil a better indicator of gasoline prices?** 
+
+To answer this question we can do separate linear regression models for WTI and Brent. The model with the lowest R square.
+
+**GOM Gasoline vs Oil Indices**
+
+We build models agaisnt WTI and Brent oil prices and determine which index price better predicts this gasoline price. We start with a model of WTI vs GOM gasoline, theb Brent vs GOM gasoline, and using the R Square of each, determine which is a better predictor.
+
+```{r}
+WTI_GOM_model<-lm(GOM_Gasoline_Price ~ WTI_Price,data = dtFinal)
+plot(x=dtFinal$WTI_Price, y=dtFinal$GOM_Gasoline_Price)
+abline(WTI_GOM_model)
+summary(WTI_GOM_model)
+```
+
+We find this model to have a pretty high R square at 0.9648
+
+```{r}
+Gasoline_Results<-data.frame(GOM_WTI=summary(WTI_GOM_model)$r.squared)
+```
+
+
+We also look at residuals to make sure the model is valid. As shown below the distribution histogram shows they are normal, the probability plot shows point close to the center line. The scattered plot should show constant variability with no patterns, but as seen below there for lower gasoline prices, points are closer together. At higher prices they widen with even some outliners with very high residuals at the higher gasoline prices. This does cast some doubt on the model. Further analysis might be required.
+
+```{r}
+#normal distributions of residuals
+hist(WTI_GOM_model$residuals)
+#points close to the center line
+qqnorm(WTI_GOM_model$residuals)
+qqline(WTI_GOM_model$residuals)
+#constant variability
+plot(WTI_GOM_model$residuals ~ dtFinal$GOM_Gasoline_Price)
+abline(h = 0, lty = 3)
+```
+
+A model of Brent vs GOM Gasoline prices is built analyzing in the same matter.
+
+```{r}
+Brent_GOM_model<-lm(GOM_Gasoline_Price ~ Brent_Price,data = dtFinal)
+plot(x=dtFinal$Brent_Price, y=dtFinal$GOM_Gasoline_Price)
+abline(Brent_GOM_model)
+summary(Brent_GOM_model)
+```
+
+We find this model to have a pretty high R square at 0.9731
+
+```{r}
+Gasoline_Results$GOM_Brent<-summary(Brent_GOM_model)$r.squared
+```
+
+The residual analysis is similar to the previous model. Distribution and probability plots show a good model, but constant variability as seen in the scattered plot might require further review.
+
+```{r}
+#normal distributions of residuals
+hist(Brent_GOM_model$residuals)
+#points close to the center line
+qqnorm(Brent_GOM_model$residuals)
+qqline(Brent_GOM_model$residuals)
+#constant variability
+plot(Brent_GOM_model$residuals ~ dtFinal$GOM_Gasoline_Price)
+abline(h = 0, lty = 3)
+```
+
+**GOM Gasoline predictor:** With a higer Rsquare, we find Brent oil to be a better predictor of GOM Gasoline prices.
+
+**NY Gasoline vs Oil Indices**
+
+We follow the same analysis as we did for GOM Gasoline. First we build a model agasit WTI and then agaisnt Brent oil.
+
+```{r}
+WTI_NY_model<-lm(NY_Gasoline_Price ~ WTI_Price,data = dtFinal)
+plot(x=dtFinal$WTI_Price, y=dtFinal$NY_Gasoline_Price)
+abline(WTI_NY_model)
+summary(WTI_NY_model)
+```
+
+We find this model to have a pretty high R square at 0.9664
+
+```{r}
+Gasoline_Results$NY_WTI<-summary(WTI_NY_model)$r.squared
+```
+
+Our analysis of the residuals shows similar results as with the GOM models. Constant variability might need to be revisited.
+
+```{r}
+#normal distributions of residuals
+hist(WTI_NY_model$residuals)
+#points close to the center line
+qqnorm(WTI_NY_model$residuals)
+qqline(WTI_NY_model$residuals)
+#constant variability
+plot(WTI_NY_model$residuals ~ dtFinal$NY_Gasoline_Price)
+abline(h = 0, lty = 3)
+```
+
+Finaly we build a model agaisnt Brent oil.
+
+```{r}
+Brent_NY_model<-lm(NY_Gasoline_Price ~ Brent_Price,data = dtFinal)
+plot(x=dtFinal$Brent_Price, y=dtFinal$NY_Gasoline_Price)
+abline(Brent_NY_model)
+summary(Brent_NY_model)
+```
+
+We find this model to have a pretty high R square at 0.9812
+
+```{r}
+Gasoline_Results$NY_Brent<-summary(Brent_NY_model)$r.squared
+```
+
+Our analysis of the residuals shows similar results as with the GOM models. Constant variability might need to be revisited.
+
+```{r}
+#normal distributions of residuals
+hist(Brent_NY_model$residuals)
+#points close to the center line
+qqnorm(Brent_NY_model$residuals)
+qqline(Brent_NY_model$residuals)
+#constant variability
+plot(Brent_NY_model$residuals ~ dtFinal$NY_Gasoline_Price)
+abline(h = 0, lty = 3)
+```
+
+**NY Gasoline predictor:** With a higer Rsquare, we find Brent oil to be a better predictor of NY Gasoline prices.
+
+## Part 5 - Conclusion
+
+**1) Have different administrations supported US (WTI) or international (Brent) oil differently?**
+
+Our inference analysis suggest there is a difference between how both parties handle WTI and Brent oil prices, and thus their approach to international relations (as they relate to international oil prices). Republican adminstrations show to favor higher WTI prices, while Democratic administration favor higher Brent prices. 
+
+**2) Is US domestic (WTI) or imported (Brent) oil a better indicator of gasoline prices?** 
+
+Results for our Gasoline analysis is shown below.
+
+```{r}
+Gasoline_Results %>% kable() %>% kable_styling() %>% scroll_box()
+```
+
+Here we can see how for both Gasoline Indices Brent Oil prices are a better predictor. This is somewhat unexpected, as our premise was that NY Gasoline would better reflect domestic WTI prices. The analysis performed however suggest oil prices are better lined with international Brent Oil that to domestic WTI, regardless of where in the country gasoline is being produced and traded.
+
+**General Conclusion**   
+
+The analysis suggest international relations are relevant to the prices of gasoline in our country. Brent oil is a good indicator of gasoline prices regardless of where it is produced and traded. Analysis also suggest one party's position has resulted in different/lower Brent oil prices compared to the other. Administrations with the Republican party at the helm show statistically significant lower Brent oil prices. Since these oil prices have been found to correlate with gasoline prices very well, this party's administrations show helping lower the cost of gasoline for Americans.
+
+To keep in mind in this analysis, oil prices have a substantial lagging effect. Policies to either increase of decrease prices might have a lagging effect. Although small ups and downs are certainly seen in the short term, because of the industry's capital intensive nature, changes in policy might not be reflected after several years. So policies in a Democratic administration might not be visible until the Republican administration is at the helm. Also the oil landscape is changing fast. Demand growth is decelerating rapidly, new forms of anergy are emerging, margins for oil companies is decreasing, and the US is now the worlds top producers. Infrastructure in the US is changing with new pipelines and transportation alternatives growing daily. It is becoming hard to really paint a picture of what the energy landscape will look like in a few years.
+
+## References
+
+Laffer Associates Oil and Energy: Thirty-Five Years of Supply-Side Economics. Brian Domitrovic Pacific Research Institute for Public Policy, Dec 1, 2016
+
+WTI vs. Brent Crude Oil: What is the Difference? Daniela Pylypczak-WasylyszynJun 24, 2015
+
+
+
